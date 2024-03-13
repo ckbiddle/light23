@@ -41,7 +41,13 @@
  * ---------- ------------------------- ----------------------------------------
  * 12/09/2021 Chris Biddle              Initial release
  * 07/28/2022 Chris Biddle              Adapted for NodeMCU.
- * 
+ * 03/10/2024 Chris Biddle              In setup(), commented out any Serial IO
+ *                                      code like Serial.begin(),
+ *                                      Serial.println(), etc. Commented out the
+ *                                      power up safety delay of 3000ms and the
+ *                                      1000ms delay at the very end of setup().
+ *                                      Neither are needed. 
+ *
  ******************************************************************************/
 
 // Import required libraries
@@ -54,8 +60,12 @@
 #define NUM_LEDS            128
 #define LED_TYPE            WS2812B
 #define COLOR_ORDER         GRB
-#define DEFAULT_FRAME_RATE  40
-#define DEFAULT_BRIGHTNESS  255    // 255 is brightest
+#define DEFAULT_FRAME_RATE  30
+#define HIGH_BRIGHTNESS     200  // 255 is absolute max
+#define MEDIUM_BRIGHTNESS   70
+#define LOW_BRIGHTNESS      10
+#define MAX_RAINBOW_BRIGHTNESS 150
+#define DEFAULT_BRIGHTNESS  HIGH_BRIGHTNESS
 
 // Command byte values from I2C master
 // Pattern modes must be less than 10
@@ -139,74 +149,113 @@ String mainPage = String( "<html>"
 
 void setup()
 {
-  Serial.begin( 115200 );
+  // Serial.begin( 115200 );
 
-  delay( 3000 ); // power-up safety delay
+  // delay( 3000 ); // power-up safety delay
 
   // Setting the ESP as an access point
-  Serial.print( "Setting AP (Access Point)…" );
-  
+  // Serial.print( "Setting AP (Access Point)…" );
+
   // Remove the password parameter, if you want the AP (Access Point) to be open
   WiFi.softAP( ssid, password );
 
   IPAddress IP = WiFi.softAPIP();
-  Serial.print( "AP IP address: " );
-  Serial.println( IP );
+  // Serial.print( "AP IP address: " );
+  // Serial.println( IP );
 
   server.on( "/", HTTP_GET, []( AsyncWebServerRequest *request )
   {
+    if ( currentBrightness == MAX_RAINBOW_BRIGHTNESS )
+    {
+      currentBrightness = HIGH_BRIGHTNESS;
+    }
+
     patternMode = CYCLE;
     request->send_P( 200, "text/html", mainPage.c_str());
   });
 
   server.on( "/singlepanel", HTTP_GET, []( AsyncWebServerRequest *request )
   {
+    if ( currentBrightness == MAX_RAINBOW_BRIGHTNESS )
+    {
+      currentBrightness = HIGH_BRIGHTNESS;
+    }
+
     patternMode = SINGLE_PANEL_BACK_AND_FORTH;
     request->send_P( 200, "text/html", mainPage.c_str());
   });
 
   server.on( "/singlepanelfwd", HTTP_GET, []( AsyncWebServerRequest *request )
   {
+    if ( currentBrightness == MAX_RAINBOW_BRIGHTNESS )
+    {
+      currentBrightness = HIGH_BRIGHTNESS;
+    }
+
     patternMode = SINGLE_PANEL_PULL_FORWARD;
     request->send_P( 200, "text/html", mainPage.c_str());
   });
 
   server.on( "/multipanel", HTTP_GET, []( AsyncWebServerRequest *request )
   {
+    if ( currentBrightness == MAX_RAINBOW_BRIGHTNESS )
+    {
+      currentBrightness = HIGH_BRIGHTNESS;
+    }
+
     patternMode = MULTI_PANEL;
     request->send_P( 200, "text/html", mainPage.c_str());
   });
 
   server.on( "/trailgradient", HTTP_GET, []( AsyncWebServerRequest *request )
   {
+    if ( currentBrightness == MAX_RAINBOW_BRIGHTNESS )
+    {
+      currentBrightness = HIGH_BRIGHTNESS;
+    }
+
     patternMode = GRADIENT_PULSE;
     request->send_P( 200, "text/html", mainPage.c_str());
   });
   
   server.on( "/rainbow", HTTP_GET, []( AsyncWebServerRequest *request )
   {
+    if ( currentBrightness == HIGH_BRIGHTNESS )
+    {
+      currentBrightness = MAX_RAINBOW_BRIGHTNESS;
+    }
+    
     patternMode = RAINBOW;
     request->send_P( 200, "text/html", mainPage.c_str());
   });
 
   server.on( "/br_low", HTTP_GET, []( AsyncWebServerRequest *request )
   {
-    FastLED.setBrightness( 10 );
-    currentBrightness = 10;
+    FastLED.setBrightness( LOW_BRIGHTNESS );
+    currentBrightness = LOW_BRIGHTNESS;
     request->send_P( 200, "text/html", mainPage.c_str());
   });
 
   server.on( "/br_medium", HTTP_GET, []( AsyncWebServerRequest *request )
   {
-    FastLED.setBrightness( 70 );
-    currentBrightness = 70;
+    FastLED.setBrightness( MEDIUM_BRIGHTNESS );
+    currentBrightness = MEDIUM_BRIGHTNESS;
     request->send_P( 200, "text/html", mainPage.c_str());
   });
 
   server.on( "/br_high", HTTP_GET, []( AsyncWebServerRequest *request )
   {
-    FastLED.setBrightness( 255 );
-    currentBrightness = 255;
+    if ( patternMode == RAINBOW )
+    {
+      FastLED.setBrightness( MAX_RAINBOW_BRIGHTNESS );
+      currentBrightness = MAX_RAINBOW_BRIGHTNESS;
+    }
+    else
+    {
+      FastLED.setBrightness( HIGH_BRIGHTNESS );
+      currentBrightness = HIGH_BRIGHTNESS;
+    }
+    
     request->send_P( 200, "text/html", mainPage.c_str());
   });
 
@@ -228,7 +277,7 @@ void setup()
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection( TypicalLEDStrip );
   FastLED.setBrightness( DEFAULT_BRIGHTNESS );
 
-  delay( 1000 );
+  // delay( 1000 );
 }
 
 void loop()
@@ -333,6 +382,16 @@ void loop()
     }
 
     // Moving rainbow colors
+    // We don't want the rainbow pattern to run at HIGH_BRIGHTNESS. The LED matrix
+    // runs too hot.
+    
+    int brightnessBeforeRainbow = currentBrightness;
+
+    if ( currentBrightness == HIGH_BRIGHTNESS )
+    {
+      currentBrightness = MAX_RAINBOW_BRIGHTNESS;
+    }
+    
     for ( int jnx = 0; standbyOff && patternMode == CYCLE && jnx < 10; jnx++ )
     {
       for ( int inx = 0; standbyOff && patternMode == CYCLE && inx < numPanels; inx++ )
@@ -340,6 +399,9 @@ void loop()
         cycleRainbow( numPanels - 1 - inx, ledsPerRow, numPanels );   
       }
     }
+
+    // Restore the brightness back to what it was before the rainbow pattern.
+    currentBrightness = brightnessBeforeRainbow;
 
     currentGradientPulseIteration = 0;
 
@@ -766,6 +828,16 @@ void loop()
       currentGradientPulseIteration = 1;
     }
   }
+}
+
+void switchRainbowToHigh()
+{
+  if ( currentBrightness == MAX_RAINBOW_BRIGHTNESS )
+  {
+    currentBrightness = HIGH_BRIGHTNESS;
+  }
+
+  
 }
 
 void cycleBufferPalette( int pStartRowIndex,  // Must be 0 to 16

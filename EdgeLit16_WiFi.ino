@@ -47,6 +47,7 @@
  *                                      power up safety delay of 3000ms and the
  *                                      1000ms delay at the very end of setup().
  *                                      Neither are needed. 
+ * 04/06/2024 Chris Biddle              Added 1000ms power up safety delay.
  *
  ******************************************************************************/
 
@@ -151,7 +152,7 @@ void setup()
 {
   // Serial.begin( 115200 );
 
-  // delay( 3000 ); // power-up safety delay
+  delay( 1000 ); // power-up safety delay
 
   // Setting the ESP as an access point
   // Serial.print( "Setting AP (Access Point)…" );
